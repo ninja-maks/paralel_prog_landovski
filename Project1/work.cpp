@@ -7,46 +7,69 @@
 
 double y_eq(double x) {
 
-	return std::sqrt((std::pow(x, 4) - std::tan(std::pow(x, 2))));
+	return std::sqrt(std::powf((double)x, 4));
 
 }
 
-double intergral(double a, double b, int n) {
-
+void intergral(double a, double b, double n, double* result) {
+	*result = 0;
 	double h = (b - a) / n;
 	double cur = a;
-	double result = 0;
 	while (cur < b) {
-		result = y_eq(cur) * h;
+		*result += y_eq(cur) * h;
 		cur += h;
 	}
-	return result;
+}
+
+void integral_thread(double a, double b, double n, double*total_result) {
+	int num_threads = 0;
+	std::vector<std::thread> threads;
+	double h = ((b - a) / n);
+	// Размер части для каждого потока
+	double part_size = (b - a) / num_threads  - fmod((b - a) / num_threads,h) ;
+
+
+
+	for (int i = 0; i < num_threads; ++i) {
+		double thread_a = a + i * part_size;
+		double thread_b = (i == (num_threads - 1)) ? b : (thread_a + part_size); // Чтобы последний поток достигал b
+		double n_this = n / num_threads;
+		threads.emplace_back(intergral, thread_a, thread_b, n_this, total_result);
+	}
+
+	// Ожидание окончания потоков
+	for (std::thread& t : threads) {
+		t.join();
+	}
+
+
 }
 
 
 int main() {
 	setlocale(LC_ALL, "RU");
-	auto start = std::chrono::high_resolution_clock::now();
+	
 
 	double a =  0;
-	double b =  10000;
-	int n = 10000000;
+	double b =  10;
+	int n = 10000;
 
-	int num_threads = std::thread::hardware_concurrency(); // Получаем количество доступных потоков
-    double total_result = 0;
-    std::vector<std::thread> threads;
-
-    double part_size = (b - a) / num_threads; // Вычисляем размер части для каждого потока
-
-
-
-	std::cout << "S: " << intergral(0, 10000, 10000000)<< std::endl;
+	auto start = std::chrono::high_resolution_clock::now();
+	double result;
+	intergral(a, b, n, &result);
+	std::cout << "S: " << result<< std::endl;
 	auto end = std::chrono::high_resolution_clock::now();
-
 	std::chrono::duration<double> elapsed = end - start;
+	std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
 
-	std::cout << "Время выполнения: " << elapsed.count() << " секунд" << std::endl;
-	std:: cout << "Кол-во потоков: " << num_threads;
+	start = std::chrono::high_resolution_clock::now();
+	integral_thread(a, b, n, &result);
+	std::cout << "S: " << result << std::endl;
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = end - start;
+	std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
+	
+	
 	return 0;
 
 }
