@@ -57,6 +57,7 @@ void *integral(void *arg)
 
 void integral_thread(double a, double b, double n, double *total_result, int threads_num)
 {
+    *total_result = 0;
     int num_threads = threads_num;
     std::vector<ThreadData> thread_data(num_threads);
 
@@ -118,12 +119,12 @@ void test_thread(double a, double b, double n, int threads_num)
 
         start = std::chrono::high_resolution_clock::now();
 
-        double result = 0;
+        result = 0;
         ThreadData thread_data = {a, b, b, &result};
 
         integral(&thread_data);
 
-        std::cout << "S: " << result << std::endl;
+        std::cout << "S: " << *thread_data.total_result << std::endl;
         end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
         std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
@@ -131,7 +132,11 @@ void test_thread(double a, double b, double n, int threads_num)
         result = 0;
         start = std::chrono::high_resolution_clock::now();
     }
+    
+    result=0;
+    MPI_Barrier(MPI_COMM_WORLD); 
     integral_thread(a, b, n, &result, threads_num);
+
     if (stat_mem.rank == 0)
     {
         std::cout << "S: " << result << std::endl;
@@ -139,6 +144,8 @@ void test_thread(double a, double b, double n, int threads_num)
         elapsed = end - start;
         std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
     }
+//      std::cout << "All processes are synchronized."<< " rank:" << stat_mem.rank <<"\n";
+//    MPI_Barrier(MPI_COMM_WORLD); 
     
 }
 
@@ -147,20 +154,20 @@ int main(int argc, char **argv)
     stat_mem.argc = argc;
     stat_mem.argv = argv;
 
+
+
     MPI_Init(&stat_mem.argc, &stat_mem.argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &stat_mem.rank);
     MPI_Comm_size(MPI_COMM_WORLD, &stat_mem.size);
 
     setlocale(LC_ALL, "RU");
-
+    // std::cout << "size:" << stat_mem.size << std::endl;
     double a = 0;
-    double b = 10;
-    int n = 1;
+    double b = 10000000;
+    int n = 1000000;
 
-    test_thread(a, b, (double)n, 2);
-    test_thread(a, b, (double)n, 4);
-    test_thread(a, b, (double)n, 8);
-    test_thread(a, b, (double)n, 10);
+    test_thread(a, b, (double)n, stat_mem.size-1);
+
     MPI_Finalize();
     return 0;
 }

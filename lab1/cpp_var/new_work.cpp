@@ -26,7 +26,7 @@ void intergral(double a, double b, double n, double* result) {
 	
 }
 
-void integral_thread(double a, double b, double n, double* total_result) {
+void integral_thread(double a, double b, double n, double* total_result,int threads_num ) {
 	int num_threads = 2;
 	std::vector<std::thread> threads;
 	double h = ((b - a) / n);
@@ -56,32 +56,44 @@ void integral_thread(double a, double b, double n, double* total_result) {
 }
 
 
-int main() {
-	setlocale(LC_ALL, "RU");
+void test_thread(double a, double b, double n, int threads_num)
+{
 
-
-	double a = 0;
-	double b = 10000000;
-	int n = 1000000;
-
+	std::cout << "================= " << threads_num <<" =================" << std::endl; 
 	auto start = std::chrono::high_resolution_clock::now();
+
 	double result = 0;
-	intergral(a, b, n, &result);
+	// ThreadData thread_data = {a, b, b, &result};
+	intergral(a, b, b, &result);
+
 	std::cout << "S: " << result << std::endl;
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = end - start;
 	std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
 	result = 0;
 	start = std::chrono::high_resolution_clock::now();
-	integral_thread(a, b, n, &result);
+
+	integral_thread(a, b, n, &result, threads_num);
+
 	std::cout << "S: " << result << std::endl;
 	end = std::chrono::high_resolution_clock::now();
 	elapsed = end - start;
 	std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
-
-
-	return 0;
-
 }
 
+int main()
+{
+	setlocale(LC_ALL, "RU");
+
+	double a = 0;
+	double b = 10000000;
+	int n = 1000000;
+
+	test_thread(a, b,  (double)n, 2);
+	test_thread(a, b,  (double)n, 4);
+	test_thread(a, b,  (double)n, 8);
+	test_thread(a, b,  (double)n, 10);
+
+	return 0;
+}
 
