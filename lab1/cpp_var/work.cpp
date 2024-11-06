@@ -7,58 +7,58 @@
 
 std::mutex mtx;
 
-double y_eq(double x) {
+double y_eq(double x)
+{
 
-	return std::sqrt(std::sqrt(std::pow(std::sqrt(std::pow(std::sqrt(std::pow(std::sqrt( std::pow(2 * x, 2)), 2)), 2)), 2)));
-
+	return std::sqrt(std::sqrt(std::pow(std::sqrt(std::pow(std::sqrt(std::pow(std::sqrt(std::pow(2 * x, 2)), 2)), 2)), 2)));
 }
 
-void intergral(double a, double b, double n, double* result) {
+void intergral(double a, double b, double n, double *result)
+{
 	double h = (b - a) / n;
 	double cur = a;
 	double temp_res = 0;
-	while (cur < b) {
+	while (cur < b)
+	{
 		temp_res += y_eq(cur) * h;
 		cur += h;
 	}
 	std::lock_guard<std::mutex> guard(mtx);
 	*result += temp_res;
-	
 }
 
-void integral_thread(double a, double b, double n, double* total_result) {
+void integral_thread(double a, double b, double n, double *total_result)
+{
 	int num_threads = 2;
 	std::vector<std::thread> threads;
 	double h = ((b - a) / n);
 	// Размер части для каждого потока
-	
+
 	int steps_count = n / num_threads;
 
+	for (int i = 0; i < num_threads; i++)
+	{
+		double n_this = (i == (num_threads - 1)) ? n - (steps_count * num_threads) + steps_count : steps_count;
+		double thread_a = a + i * h * steps_count;
+		double thread_b = (i == (num_threads - 1)) ? b : (thread_a + (h * n_this)); // Чтобы последний поток достигал b
 
-	for (int i = 0; i < num_threads; i++) {
-		double n_this = (i == (num_threads - 1)) ? n - (steps_count *num_threads) + steps_count : steps_count;
-		double thread_a = a + i * h* steps_count;
-		double thread_b = (i == (num_threads - 1)) ? b : (thread_a + (h* n_this)); // Чтобы последний поток достигал b
-		
 		/*std::cout << "thread_a is " << thread_a << std::endl;
 		std::cout << "thread_b is " << thread_b << std::endl;
 		std::cout << "n_this is " << n_this << std::endl;*/
-		
+
 		threads.emplace_back(intergral, thread_a, thread_b, n_this, total_result);
 	}
 
 	// Ожидание окончания потоков
-	for (std::thread& t : threads) {
+	for (std::thread &t : threads)
+	{
 		t.join();
 	}
-
-
 }
 
-
-int main() {
+int main()
+{
 	setlocale(LC_ALL, "RU");
-
 
 	double a = 0;
 	double b = 10000000;
@@ -79,9 +79,5 @@ int main() {
 	elapsed = end - start;
 	std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
 
-
 	return 0;
-
 }
-
-

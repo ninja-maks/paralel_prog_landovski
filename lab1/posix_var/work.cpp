@@ -80,7 +80,7 @@ void integral_thread(double a, double b, double n, double *total_result, int thr
 void test_thread(double a, double b, double n, int threads_num)
 {
 
-	std::cout << "================= " << threads_num <<" =================" << std::endl; 
+	std::cout << "================= " << threads_num << " =================" << std::endl;
 	auto start = std::chrono::high_resolution_clock::now();
 
 	double result = 0;
@@ -110,10 +110,10 @@ int main()
 	double b = 10000000;
 	int n = 1000000;
 
-	test_thread(a, b,  (double)n, 2);
-	test_thread(a, b,  (double)n, 4);
-	test_thread(a, b,  (double)n, 8);
-	test_thread(a, b,  (double)n, 10);
+	test_thread(a, b, (double)n, 2);
+	test_thread(a, b, (double)n, 4);
+	test_thread(a, b, (double)n, 8);
+	test_thread(a, b, (double)n, 10);
 
 	return 0;
 }

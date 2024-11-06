@@ -74,40 +74,39 @@ void integral_thread(double a, double b, double n, double *total_result, int thr
             thread_b = (i == (num_threads - 1)) ? b : (thread_a + (b - a) / n * n_this);
 
             // Заполнение структуры данными для потока
-            MPI_Send(&thread_a, 1, MPI_DOUBLE, i+1, 0, MPI_COMM_WORLD);
-            MPI_Send(&thread_b, 1, MPI_DOUBLE, i+1, 0, MPI_COMM_WORLD);
-            MPI_Send(&n_this, 1, MPI_DOUBLE, i+1, 0, MPI_COMM_WORLD);
+            MPI_Send(&thread_a, 1, MPI_DOUBLE, i + 1, 0, MPI_COMM_WORLD);
+            MPI_Send(&thread_b, 1, MPI_DOUBLE, i + 1, 0, MPI_COMM_WORLD);
+            MPI_Send(&n_this, 1, MPI_DOUBLE, i + 1, 0, MPI_COMM_WORLD);
         }
-    }else{
-    MPI_Recv(&thread_a, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Recv(&thread_b, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Recv(&n_this, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
+    }
+    else
+    {
+        MPI_Recv(&thread_a, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&thread_b, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&n_this, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
-    
     double result = 0;
     ThreadData it = {thread_a, thread_b, n_this, &result};
     integral(&it);
-
-    
 
     *total_result = 0;
     if (stat_mem.rank == 0)
     {
         for (int i = 0; i < num_threads; i++)
         {
-            MPI_Recv(&result, 1, MPI_DOUBLE, i+1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&result, 1, MPI_DOUBLE, i + 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             *total_result += result;
         }
-    }else{
+    }
+    else
+    {
         MPI_Send(&result, 1, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD);
     }
 }
 
 void test_thread(double a, double b, double n, int threads_num)
 {
-    
 
     std::chrono::_V2::system_clock::time_point start;
     std::chrono::_V2::system_clock::time_point end;
@@ -132,9 +131,9 @@ void test_thread(double a, double b, double n, int threads_num)
         result = 0;
         start = std::chrono::high_resolution_clock::now();
     }
-    
-    result=0;
-    MPI_Barrier(MPI_COMM_WORLD); 
+
+    result = 0;
+    MPI_Barrier(MPI_COMM_WORLD);
     integral_thread(a, b, n, &result, threads_num);
 
     if (stat_mem.rank == 0)
@@ -144,17 +143,14 @@ void test_thread(double a, double b, double n, int threads_num)
         elapsed = end - start;
         std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
     }
-//      std::cout << "All processes are synchronized."<< " rank:" << stat_mem.rank <<"\n";
-//    MPI_Barrier(MPI_COMM_WORLD); 
-    
+    //      std::cout << "All processes are synchronized."<< " rank:" << stat_mem.rank <<"\n";
+    //    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 int main(int argc, char **argv)
 {
     stat_mem.argc = argc;
     stat_mem.argv = argv;
-
-
 
     MPI_Init(&stat_mem.argc, &stat_mem.argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &stat_mem.rank);
@@ -166,7 +162,7 @@ int main(int argc, char **argv)
     double b = 10000000;
     int n = 1000000;
 
-    test_thread(a, b, (double)n, stat_mem.size-1);
+    test_thread(a, b, (double)n, stat_mem.size - 1);
 
     MPI_Finalize();
     return 0;
