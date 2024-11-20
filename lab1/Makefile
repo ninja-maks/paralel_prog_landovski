@@ -12,11 +12,7 @@ posix_var_test:
 	./a.out
 	rm a.out
 
-mpi_var_test:
-	mpicxx ./mpi_var/work.cpp
-	mpirun -np 3 --bind-to core ./a.out
-	mpirun -np 5 --bind-to core ./a.out
-	mpirun -np 7 --bind-to core ./a.out
-	mpirun -np 9 --bind-to core ./a.out
-	mpirun -np 11 --bind-to core ./a.out
+opem_mp_var_test:
+	$(CC) -g ./open_mp_var/work.cpp -fopenmp
+	./a.out
 	rm a.out

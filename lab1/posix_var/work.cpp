@@ -26,7 +26,7 @@ double y_eq(double x)
 void *integral(void *arg)
 {
 	ThreadData *data = static_cast<ThreadData *>(arg);
-	// {thread_a, thread_b, n_this, total_result}
+
 	double n = data->n;
 	double a = data->a;
 	double b = data->b;
@@ -42,11 +42,7 @@ void *integral(void *arg)
 	std::lock_guard<std::mutex> guard(mtx);
 	*result += temp_res;
 	return nullptr;
-	/*std::cout << "thread_a is " << a << std::endl;
-	std::cout << "thread_b is " << b << std::endl;
-	std::cout << "n_this is " << n << std::endl;
-	std::cout << "res_tmp is " << temp_res  << " res_cur is " << *result << std::endl;*/
-	// std::cout << "res is " << *result << std::endl;
+
 }
 
 void integral_thread(double a, double b, double n, double *total_result, int threads_num)
