@@ -1,82 +1,101 @@
 #include </usr/include/x86_64-linux-gnu/mpich/mpi.h>
-// #include </usr/include/x86_64-linux-gnu/mpich/mpiof.h>
-// #include </usr/include/x86_64-linux-gnu/mpich/mpif.h>
-// #include </usr/include/x86_64-linux-gnu/mpich/mpio.h>
-// #include </usr/include/x86_64-linux-gnu/mpich/mpicxx.h>
 #include <iostream>
 #include <cmath>
+#include <chrono>
 
-
-double f(double x) {
-    return x * x; 
+double f(double x)
+{
+    return x * x;
 }
 
-
-double integrate(double a, double b, int n) {
-    double h = (b - a) / n;  
+double integrate(double a, double b, int n)
+{
+    double h = (b - a) / n;
     double sum = 0.0;
 
-    for (int i = 0; i < n; ++i) {
-        double x = a + (i + 0.5) * h;  
-        sum += f(x);  
+    for (int i = 0; i < n; ++i)
+    {
+        double x = a + (i + 0.5) * h;
+        sum += f(x);
     }
 
-    return sum * h;  
+    return sum * h;
 }
 
-int main(int argc, char** argv) {
-    MPI_Init(&argc, &argv); 
+int main(int argc, char **argv)
+{
+    MPI_Init(&argc, &argv);
 
     int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
-    MPI_Comm_size(MPI_COMM_WORLD, &size); 
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    double a = 0.0, b = 10.0;  
-    int n = 1000;  
-    
-    
+    double a = 0.0, b = 10.0;
+    int n = 1000;
+
+    if (rank == 0)
+    {
+        std::cout << "================= " << size << " =================" << std::endl;
+        std::cout << "one thread: " << integrate(a, b, n) << std::endl;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+
     int local_n = n / size;
     double local_a, local_b;
+    if (rank == 0)
+    {
 
-    if (rank == 0) {
-        
-        for (int i = 1; i < size; ++i) {
+        for (int i = 1; i < size; ++i)
+        {
             local_a = a + i * local_n * ((b - a) / n);
             local_b = a + (i + 1) * local_n * ((b - a) / n);
             MPI_Send(&local_a, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&local_b, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
         }
-        
-        
+
         local_a = a;
         local_b = a + local_n * ((b - a) / n);
-    } else {
-        
+    }
+    else
+    {
+
         MPI_Recv(&local_a, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&local_b, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
-    
     double local_result = integrate(local_a, local_b, local_n);
 
     // Нулевой процесс собирает результаты
     double total_result = 0.0;
-    if (rank == 0) {
-        total_result = local_result;  
+    if (rank == 0)
+    {
+        total_result = local_result;
         double recv_result;
-        for (int i = 1; i < size; ++i) {
+        for (int i = 1; i < size; ++i)
+        {
             MPI_Recv(&recv_result, 1, MPI_DOUBLE, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            total_result += recv_result;  // Суммируем результаты
+            total_result += recv_result; // Суммируем результаты
         }
-    } else {
+    }
+    else
+    {
         // Остальные процессы отправляют результаты
         MPI_Send(&local_result, 1, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD);
     }
 
-    if (rank == 0) {
+    if (rank == 0)
+    {
         std::cout << "Total integral result: " << total_result << std::endl;
     }
 
-    MPI_Finalize();  // Завершение MPI
+    if (rank == 0)
+    {
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Time: " << elapsed.count() << " secund" << std::endl;
+        std::cout << "================= " << "END" << " =================" << std::endl;
+    }
+    MPI_Finalize(); // Завершение MPI
     return 0;
 }
