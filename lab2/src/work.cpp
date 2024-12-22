@@ -64,6 +64,9 @@ public:
     void notify(){
         cv_.notify_one();
     };
+    size_t size(){
+      return queue_.size();
+    };
     
     
 
@@ -93,37 +96,23 @@ int _findGreatestCommonDivisor(int a, int b, int start, int end) {
     return 1; 
 }
 
-// std::queue<Task> readTasksFromFile(const std::string &filename) {
-//     std::queue<Task> tasks;
-//     std::ifstream file(filename); 
-
-//     if (!file.is_open()) {
-//         std::cerr << "Can`t open file: " << filename << std::endl;
-//         return tasks;
-//     }
-
+void push_taskQueue(std::vector<TaskQueue> &taskQueue, Task&task){
+    int target = 0;
+    size_t min = taskQueue[target].size();
     
-//     while (std::getline(file, line)) { 
-//         std::istringstream iss(line); 
-//         Task task;
+    for(int i = 0; i<taskQueue.size();i++){
+        if(taskQueue[i].size()<min){
+            min=taskQueue[i].size();
+            target = i;
+        }
+    }
 
-        
-//         if (iss >> task.taskNumber) {
-        
-//             std::string ignore;
-//             std::getline(iss, ignore, '.');
-//             iss >> task.x >> task.y;
-//             tasks.push(task); 
-//         }
-//     }
-
-    
-//     return tasks;
-// }
+    taskQueue[target].push(task);
+}
 
 
 // Функция потока-поставщика
-void producer(TaskQueue &taskQueue) {
+void producer(std::vector<TaskQueue> &taskQueue) {
     std::string filename = "tasks.txt";
     std::ifstream file(filename); 
 
@@ -136,34 +125,32 @@ void producer(TaskQueue &taskQueue) {
         std::istringstream iss(line); 
         Task task;
 
-        
         if (iss >> task.taskNumber) {
         
             std::string ignore;
             std::getline(iss, ignore, '.');
             iss >> task.x >> task.y;
-            taskQueue.push(task);
+            push_taskQueue(taskQueue,task);
             std::cout << "Produced task " << task.taskNumber << std::endl;
-            // std::this_thread::sleep_for(std::chrono::milliseconds(500)); 
+            // std::this_thread::sleep_for(std::chrono::milliseconds(250)); 
         }
     }
     file.close(); 
-    // // std::this_thread::sleep_for(std::chrono::seconds(10));
-    // while(!taskQueue.empty()){
-    //     std::cout << "Задача " << taskQueue.pop().taskNumber << " потеряна!";
-    // }
+
     
 }
 
-void consumer(TaskQueue &taskQueue) {
-    bool is_we_work = true;
 
-    while (is_we_work) {
+
+
+void consumer(TaskQueue &taskQueue) {
+    
+    while (true) {
         Task task = taskQueue.pop();
         task.execute();  
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));    
-        if(taskQueue.empty()){
-            is_we_work = false;
+        // std::this_thread::sleep_for(std::chrono::milliseconds(1000));    
+        while(taskQueue.empty()){
+            
         }
     }
     
@@ -173,13 +160,13 @@ void consumer(TaskQueue &taskQueue) {
 
 int main() {
     
-     TaskQueue taskQueue;
+    std::vector<TaskQueue> taskQueue(4);
 
     std::thread producerThread(producer, std::ref(taskQueue));
-    std::thread consumerThread1(consumer, std::ref(taskQueue));
-    std::thread consumerThread2(consumer, std::ref(taskQueue));
-    std::thread consumerThread3(consumer, std::ref(taskQueue));
-    std::thread consumerThread4(consumer, std::ref(taskQueue));
+    std::thread consumerThread1(consumer, std::ref(taskQueue[0]));
+    std::thread consumerThread2(consumer, std::ref(taskQueue[1]));
+    std::thread consumerThread3(consumer, std::ref(taskQueue[2]));
+    std::thread consumerThread4(consumer, std::ref(taskQueue[3]));
 
     producerThread.join();
     consumerThread1.join();
