@@ -122,7 +122,7 @@ int main(int argc, char **argv)
                 int dest_rank;
                 int tmp[] = {i, j};                        // Массив координат текущего блока (строка, столбец)
                 MPI_Cart_rank(grid_comm, tmp, &dest_rank); // Получаем ранг процесса, соответствующего координатам блока
-
+                
                 if (dest_rank != 0)
                 {
                     for (int bi = 0; bi < block_size; ++bi)
@@ -178,10 +178,9 @@ int main(int argc, char **argv)
     // Смещение `-coords[0]` определяет, насколько сдвинуть данные по кольцу.
     // Ранги соседей записываются в `right` (право) и `left` (лево).
     
-    left = row_rank == 0 ? rank + 2 : rank - 1;
-    right = row_rank == 2 ? rank - 2 : rank + 1;
-    up =  col_rank == 0 ? rank + 6 : rank - 3;
-    down =  col_rank == 2 ? rank - 6 : rank + 3;
+    MPI_Cart_shift(grid_comm, 0, 1, &left,&right);
+    
+    MPI_Cart_shift(grid_comm, 1, 1, &up,&down);
 
     // Определяем ранги соседей по вертикали.
     // Второй параметр `0` указывает направление (по оси Y).
@@ -194,16 +193,16 @@ int main(int argc, char **argv)
     // Выполняем обмен блоками матрицы `local_A` между процессами по горизонтали.
     // Данные текущего процесса отправляются соседу слева (`left`) и принимаются от соседа справа (`right`).
     // Функция `MPI_Sendrecv_replace` заменяет содержимое `local_A` на принятые данные.
-    MPI_Sendrecv_replace(local_A.data(), block_size * block_size, MPI_INT, left, 0, right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Sendrecv_replace(local_A.data(), block_size * block_size, MPI_INT, left, 0, right, 0, grid_comm, MPI_STATUS_IGNORE);
 
     // Выполняем обмен блоками матрицы `local_B` между процессами по вертикали.
     // Данные текущего процесса отправляются соседу сверху (`up`) и принимаются от соседа снизу (`down`).
     // Функция `MPI_Sendrecv_replace` заменяет содержимое `local_B` на принятые данные.
-    MPI_Sendrecv_replace(local_B.data(), block_size * block_size, MPI_INT, up, 1, down, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Sendrecv_replace(local_B.data(), block_size * block_size, MPI_INT, up, 1, down, 1, grid_comm, MPI_STATUS_IGNORE);
 
     // Итерации алгоритма Кэнона
     // Выполняем `sqrt_p` итераций для полного умножения всех соответствующих блоков матриц A и B.
-    
+
     for (int step = 0; step < sqrt_p; ++step)
     {
         // Умножение локальных блоков
@@ -214,6 +213,7 @@ int main(int argc, char **argv)
             {
                 for (int k = 0; k < block_size; ++k)
                 {
+                     
                     local_C[i * block_size + j] += local_A[i * block_size + k] * local_B[k * block_size + j];
                     file << local_A[i * block_size + k] << " * " << local_B[k * block_size + j] << "+ ";
                     // printMatrixToFile(file, local_C, block_size, block_size);
