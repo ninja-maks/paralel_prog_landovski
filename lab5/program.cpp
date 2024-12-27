@@ -70,7 +70,7 @@ void printMatrixToFile(std::ofstream &file, const std::vector<int> &matrix, int 
     {
         for (int j = 0; j < cols; ++j)
         {
-            file << std::setw(5) << matrix[i * cols + j];
+            file << std::setw(6) << matrix[i * cols + j];
         }
         file << std::endl;
     }
@@ -92,6 +92,73 @@ void print_vector(std::vector<int> local_A)
     std::cout << oss.str() << std::endl;
 }
 
+// Функция для рассылки блоков с использованием пользовательского типа
+void distributeBlocks(
+    const std::vector<int> &A, const std::vector<int> &B,
+    std::vector<int> &local_A, std::vector<int> &local_B,
+    int N, int block_size, int sqrt_p, MPI_Comm grid_comm, int rank)
+{
+    int coords[2];
+    MPI_Cart_coords(grid_comm, rank, 2, coords);
+
+    int row = coords[0]; // Координата строки в процессной сетке
+    int col = coords[1]; // Координата столбца в процессной сетке
+
+    // Создание пользовательского типа для блока
+    MPI_Datatype block_type;
+    MPI_Type_vector(block_size, block_size, N, MPI_INT, &block_type);
+    MPI_Type_commit(&block_type);
+
+    if (rank == 0)
+    {
+        for (int i = 0; i < sqrt_p; ++i)
+        {
+            for (int j = 0; j < sqrt_p; ++j)
+            {
+                int dest_rank;
+                int tmp_coords[] = {i, j};
+                MPI_Cart_rank(grid_comm, tmp_coords, &dest_rank);
+
+                // Вычисление начального индекса блока
+                int block_start_index = i * block_size * N + j * block_size;
+
+                if (dest_rank != 0)
+                {
+                    // Отправка блока A
+                    MPI_Send(&A[block_start_index], 1, block_type, dest_rank, 0, grid_comm);
+                    // Отправка блока B
+                    MPI_Send(&B[block_start_index], 1, block_type, dest_rank, 1, grid_comm);
+                }
+                else
+                {
+                    // Копирование данных в локальные массивы для rank == 0
+                    for (int bi = 0; bi < block_size; ++bi)
+                    {
+                        std::copy(
+                            &A[block_start_index + bi * N],
+                            &A[block_start_index + bi * N + block_size],
+                            &local_A[bi * block_size]);
+
+                        std::copy(
+                            &B[block_start_index + bi * N],
+                            &B[block_start_index + bi * N + block_size],
+                            &local_B[bi * block_size]);
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        // Получение блоков A и B для других процессов
+        MPI_Recv(local_A.data(), block_size * block_size, MPI_INT, 0, 0, grid_comm, MPI_STATUS_IGNORE);
+        MPI_Recv(local_B.data(), block_size * block_size, MPI_INT, 0, 1, grid_comm, MPI_STATUS_IGNORE);
+    }
+
+    // Освобождение пользовательского типа
+    MPI_Type_free(&block_type);
+}
+
 int main(int argc, char **argv)
 {
     MPI_Init(&argc, &argv);
@@ -102,7 +169,7 @@ int main(int argc, char **argv)
 
     // int log_count = 1; // Считает логи
 
-    int N = 9; // Размер матриц (должен делиться на sqrt(size))
+    int N = 3; // Размер матриц (должен делиться на sqrt(size))
     int sqrt_p = static_cast<int>(std::sqrt(size));
     if (sqrt_p * sqrt_p != size || N % sqrt_p != 0)
     {
@@ -119,6 +186,7 @@ int main(int argc, char **argv)
     std::vector<int> local_A(block_size * block_size);
     std::vector<int> local_B(block_size * block_size);
     std::vector<int> local_C(block_size * block_size, 0);
+    std::vector<int> A(N * N), B(N * N);
     std::fill(local_C.begin(), local_C.end(), 0);
 
     MPI_Comm grid_comm;
@@ -142,7 +210,7 @@ int main(int argc, char **argv)
 
     if (rank == 0)
     {
-        std::vector<int> A(N * N), B(N * N);
+
         initializeMatrix(A, N, N); // Заполняем матрицу A значениями
         initializeMatrix(B, N, N); // Заполняем матрицу B значениями
 
@@ -151,68 +219,18 @@ int main(int argc, char **argv)
 
         shiftRowsLeft(A, N, N);  // Смещаем A
         shiftColumnsUp(B, N, N); // Смещаем B
-        file << "Initial block start:" << std::endl;
+        file << "A block start:" << std::endl;
         printMatrixToFile(file, A, N, N);
-        // Рассылка блоков A и B по всем процессам
-        for (int i = 0; i < sqrt_p; ++i)
-        {
-            for (int j = 0; j < sqrt_p; ++j)
-            {
-                int dest_rank;
-                int tmp[] = {i, j};                        // Массив координат текущего блока (строка, столбец)
-                MPI_Cart_rank(grid_comm, tmp, &dest_rank); // Получаем ранг процесса, соответствующего координатам блока
-
-                if (dest_rank != 0)
-                {
-                    for (int bi = 0; bi < block_size; ++bi)
-                    {
-                        // Отправляем строку блока A соответствующему процессу
-                        MPI_Send(&A[(i * block_size + bi) * N + j * block_size], block_size, MPI_INT, dest_rank, 0, grid_comm);
-                        // Отправляем строку блока B соответствующему процессу
-                        MPI_Send(&B[(i * block_size + bi) * N + j * block_size], block_size, MPI_INT, dest_rank, 1, grid_comm);
-                    }
-                }
-                else
-                {
-                    for (int bi = 0; bi < block_size; ++bi)
-                    {
-                        // Копируем строки блока A и B в локальные массивы
-                        std::copy(&A[(i * block_size + bi) * N + j * block_size],
-                                  &A[(i * block_size + bi) * N + j * block_size] + block_size,
-                                  &local_A[bi * block_size]);
-
-                        std::copy(&B[(i * block_size + bi) * N + j * block_size],
-                                  &B[(i * block_size + bi) * N + j * block_size] + block_size,
-                                  &local_B[bi * block_size]);
-                    }
-                    file << "block A:" << std::endl;
-                    printMatrixToFile(file, local_A, block_size, block_size);
-
-                    file << "block B:" << std::endl;
-                    printMatrixToFile(file, local_B, block_size, block_size);
-                }
-            }
-        }
-    }
-    else
-    {
-        for (int bi = 0; bi < block_size; ++bi)
-        {
-            // Получаем строки блока A от нулевого процесса
-            MPI_Recv(&local_A[bi * block_size], block_size, MPI_INT, 0, 0, grid_comm, MPI_STATUS_IGNORE);
-            // print_vector(local_A);
-
-            // Получаем строки блока B от нулевого процесса
-            MPI_Recv(&local_B[bi * block_size], block_size, MPI_INT, 0, 1, grid_comm, MPI_STATUS_IGNORE);
-            // print_vector(local_B);
-            file << "block A:" << std::endl;
-            printMatrixToFile(file, local_A, block_size, block_size);
-
-            file << "block B:" << std::endl;
-            printMatrixToFile(file, local_B, block_size, block_size);
-        }
+        file << "B block start:" << std::endl;
+        printMatrixToFile(file, B, N, N);
     }
 
+    distributeBlocks(A, B, local_A, local_B, N, block_size, sqrt_p, grid_comm, rank);
+    file << "block A:" << std::endl;
+    printMatrixToFile(file, local_A, block_size, block_size);
+
+    file << "block B:" << std::endl;
+    printMatrixToFile(file, local_B, block_size, block_size);
     // Сдвиги по Кэнону
     // Объявляем переменные для хранения рангов соседей процесса: слева, справа, сверху, снизу.
     int left, right, up, down;
@@ -241,12 +259,13 @@ int main(int argc, char **argv)
         {
             for (int j = 0; j < block_size; ++j)
             {
-                for (int k = 0; k < block_size; ++k)
-                {
-                    local_C[i * block_size + j] += local_A[i * block_size + k] * local_B[k * block_size + j];
-                }
+                
+                local_C[i * block_size + j] += local_A[i * block_size + j] * local_B[i * block_size + j];
+                
             }
         }
+        file << "block C:" << std::endl;
+        printMatrixToFile(file, local_C, block_size, block_size);
 
         // Shift matrix A left within the row communicator
         MPI_Sendrecv_replace(local_A.data(), block_size * block_size, MPI_INT, (coords[1] - 1 + sqrt_p) % sqrt_p, 0,
@@ -273,8 +292,14 @@ int main(int argc, char **argv)
         result.resize(N * N); // Матрица размером NxN
     }
 
+    // Создание пользовательского типа для блока
+    MPI_Datatype block_type, resized_block_type;
+    MPI_Type_vector(block_size, block_size, N, MPI_INT, &block_type);
+    MPI_Type_create_resized(block_type, 0, sizeof(int), &resized_block_type);
+    MPI_Type_commit(&resized_block_type);
+
     // Длины блоков и смещения для каждого процесса
-    std::vector<int> sendcounts(size), displs(size);
+    std::vector<int> sendcounts(size, 1), displs(size);
     if (rank == 0)
     {
         for (int i = 0; i < sqrt_p; ++i)
@@ -285,9 +310,8 @@ int main(int argc, char **argv)
                 int coords[] = {i, j};
                 MPI_Cart_rank(grid_comm, coords, &proc_rank);
 
-                // Смещение: строка * ширина матрицы * высота блока + столбец * ширину блока
+                // Смещение в элементе глобальной матрицы
                 displs[proc_rank] = i * block_size * N + j * block_size;
-                sendcounts[proc_rank] = block_size * block_size;
             }
         }
     }
@@ -295,16 +319,15 @@ int main(int argc, char **argv)
     // Сборка блоков C в итоговую матрицу
     MPI_Gatherv(
         local_C.data(),          // Отправляемые данные
-        block_size * block_size, // Количество элементов, отправляемое каждым процессом
+        block_size * block_size, // Количество элементов от каждого процесса
         MPI_INT,                 // Тип данных
         result.data(),           // Итоговый массив на процессе 0
-        sendcounts.data(),       // Массив количества элементов от каждого процесса
-        displs.data(),           // Смещения каждого блока в итоговой матрице
-        MPI_INT,                 // Тип данных
+        sendcounts.data(),       // Количество элементов от каждого процесса (в пользовательских типах)
+        displs.data(),           // Смещения в итоговом массиве
+        resized_block_type,      // Пользовательский тип блока
         0,                       // Ранк процесса, который собирает данные
         grid_comm                // Глобальный коммуникатор
     );
-
     // Печать итоговой матрицы на процессе 0
     if (rank == 0)
     {
@@ -313,7 +336,8 @@ int main(int argc, char **argv)
     }
 
     file.close();
-
+    MPI_Type_free(&block_type);
+    MPI_Type_free(&resized_block_type);
     MPI_Finalize();
     return 0;
 }
