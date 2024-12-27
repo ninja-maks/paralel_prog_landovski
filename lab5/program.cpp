@@ -5,7 +5,7 @@
 #include <iomanip>
 #include <cmath>
 #include <string>
-
+#include <algorithm>
 /*
 
 -Максим 19.12: напиши комменты к коду то, что допливал.
@@ -26,6 +26,40 @@ void initializeMatrix(std::vector<int> &matrix, int rows, int cols)
     for (int i = 0; i < rows * cols; ++i)
     {
         matrix[i] = i + 1;
+    }
+}
+
+// Функция для смещения строк матрицы влево
+void shiftRowsLeft(std::vector<int> &matrix, int rows, int cols)
+{
+    for (int i = 0; i < rows; ++i)
+    {
+        // Вычисляем начало и конец строки в одномерном векторе
+        int start = i * cols;
+        int end = start + cols;
+        // Выполняем сдвиг влево на i позиций
+        std::rotate(matrix.begin() + start, matrix.begin() + start + i, matrix.begin() + end);
+    }
+}
+
+// Функция для смещения столбцов матрицы вверх
+void shiftColumnsUp(std::vector<int> &matrix, int rows, int cols)
+{
+    for (int j = 0; j < cols; ++j)
+    {
+        // Извлекаем столбец
+        std::vector<int> column(rows);
+        for (int i = 0; i < rows; ++i)
+        {
+            column[i] = matrix[i * cols + j];
+        }
+        // Сдвигаем столбец вверх на j позиций
+        std::rotate(column.begin(), column.begin() + j, column.end());
+        // Записываем столбец обратно
+        for (int i = 0; i < rows; ++i)
+        {
+            matrix[i * cols + j] = column[i];
+        }
     }
 }
 
@@ -55,7 +89,7 @@ void print_vector(std::vector<int> local_A)
         }
     }
     oss << "]";
-    // std::cout << oss.str() << std::endl;
+    std::cout << oss.str() << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -68,7 +102,7 @@ int main(int argc, char **argv)
 
     // int log_count = 1; // Считает логи
 
-    int N = 3; // Размер матриц (должен делиться на sqrt(size))
+    int N = 9; // Размер матриц (должен делиться на sqrt(size))
     int sqrt_p = static_cast<int>(std::sqrt(size));
     if (sqrt_p * sqrt_p != size || N % sqrt_p != 0)
     {
@@ -114,6 +148,11 @@ int main(int argc, char **argv)
 
         file << "Initial block start:" << std::endl;
         printMatrixToFile(file, A, N, N);
+
+        shiftRowsLeft(A, N, N);  // Смещаем A
+        shiftColumnsUp(B, N, N); // Смещаем B
+        file << "Initial block start:" << std::endl;
+        printMatrixToFile(file, A, N, N);
         // Рассылка блоков A и B по всем процессам
         for (int i = 0; i < sqrt_p; ++i)
         {
@@ -122,7 +161,7 @@ int main(int argc, char **argv)
                 int dest_rank;
                 int tmp[] = {i, j};                        // Массив координат текущего блока (строка, столбец)
                 MPI_Cart_rank(grid_comm, tmp, &dest_rank); // Получаем ранг процесса, соответствующего координатам блока
-                
+
                 if (dest_rank != 0)
                 {
                     for (int bi = 0; bi < block_size; ++bi)
@@ -146,6 +185,11 @@ int main(int argc, char **argv)
                                   &B[(i * block_size + bi) * N + j * block_size] + block_size,
                                   &local_B[bi * block_size]);
                     }
+                    file << "block A:" << std::endl;
+                    printMatrixToFile(file, local_A, block_size, block_size);
+
+                    file << "block B:" << std::endl;
+                    printMatrixToFile(file, local_B, block_size, block_size);
                 }
             }
         }
@@ -156,81 +200,70 @@ int main(int argc, char **argv)
         {
             // Получаем строки блока A от нулевого процесса
             MPI_Recv(&local_A[bi * block_size], block_size, MPI_INT, 0, 0, grid_comm, MPI_STATUS_IGNORE);
-            print_vector(local_A);
+            // print_vector(local_A);
 
             // Получаем строки блока B от нулевого процесса
             MPI_Recv(&local_B[bi * block_size], block_size, MPI_INT, 0, 1, grid_comm, MPI_STATUS_IGNORE);
-            print_vector(local_B);
+            // print_vector(local_B);
+            file << "block A:" << std::endl;
+            printMatrixToFile(file, local_A, block_size, block_size);
+
+            file << "block B:" << std::endl;
+            printMatrixToFile(file, local_B, block_size, block_size);
         }
     }
-
-    file << "Initial block A:" << std::endl;
-    printMatrixToFile(file, local_A, block_size, block_size);
-
-    file << "Initial block B:" << std::endl;
-    printMatrixToFile(file, local_B, block_size, block_size);
 
     // Сдвиги по Кэнону
     // Объявляем переменные для хранения рангов соседей процесса: слева, справа, сверху, снизу.
     int left, right, up, down;
+
     // Определяем ранги соседей по горизонтали.
     // Второй параметр `1` указывает направление (по оси X).
-    // Смещение `-coords[0]` определяет, насколько сдвинуть данные по кольцу.
     // Ранги соседей записываются в `right` (право) и `left` (лево).
-    
-    MPI_Cart_shift(grid_comm, 0, 1, &left,&right);
-    
-    MPI_Cart_shift(grid_comm, 1, 1, &up,&down);
+
+    MPI_Cart_shift(grid_comm, 0, 1, &left, &right);
 
     // Определяем ранги соседей по вертикали.
     // Второй параметр `0` указывает направление (по оси Y).
-    // Смещение `-coords[1]` определяет, насколько сдвинуть данные по кольцу.
     // Ранги соседей записываются в `down` (вниз) и `up` (вверх).
-    
+    MPI_Cart_shift(grid_comm, 1, 1, &up, &down);
 
-    file << "l:"<<left << " r:"<< right << " u:"<< up <<" d:" << down << std::endl;  
-    file << "col_rank:"<< col_rank << " row_rank:"<< row_rank<< " rank:" << rank <<std::endl;
-    // Выполняем обмен блоками матрицы `local_A` между процессами по горизонтали.
-    // Данные текущего процесса отправляются соседу слева (`left`) и принимаются от соседа справа (`right`).
-    // Функция `MPI_Sendrecv_replace` заменяет содержимое `local_A` на принятые данные.
-    MPI_Sendrecv_replace(local_A.data(), block_size * block_size, MPI_INT, left, 0, right, 0, grid_comm, MPI_STATUS_IGNORE);
-
-    // Выполняем обмен блоками матрицы `local_B` между процессами по вертикали.
-    // Данные текущего процесса отправляются соседу сверху (`up`) и принимаются от соседа снизу (`down`).
-    // Функция `MPI_Sendrecv_replace` заменяет содержимое `local_B` на принятые данные.
-    MPI_Sendrecv_replace(local_B.data(), block_size * block_size, MPI_INT, up, 1, down, 1, grid_comm, MPI_STATUS_IGNORE);
+    // file << "l:"<<left << " r:"<< right << " u:"<< up <<" d:" << down << std::endl;
+    // file << "col_rank:"<< col_rank << " row_rank:"<< row_rank<< " rank:" << rank <<std::endl;
 
     // Итерации алгоритма Кэнона
     // Выполняем `sqrt_p` итераций для полного умножения всех соответствующих блоков матриц A и B.
 
     for (int step = 0; step < sqrt_p; ++step)
     {
-        // Умножение локальных блоков
-        file << "Calc block C: ";
+        // Compute partial result for the current step
         for (int i = 0; i < block_size; ++i)
         {
             for (int j = 0; j < block_size; ++j)
             {
                 for (int k = 0; k < block_size; ++k)
                 {
-                     
                     local_C[i * block_size + j] += local_A[i * block_size + k] * local_B[k * block_size + j];
-                    file << local_A[i * block_size + k] << " * " << local_B[k * block_size + j] << "+ ";
-                    // printMatrixToFile(file, local_C, block_size, block_size);
                 }
             }
         }
-        file << std::endl;
 
-        // Синхронизация перед сдвигом
-        MPI_Barrier(grid_comm);
+        // Shift matrix A left within the row communicator
+        MPI_Sendrecv_replace(local_A.data(), block_size * block_size, MPI_INT, (coords[1] - 1 + sqrt_p) % sqrt_p, 0,
+                             (coords[1] + 1) % sqrt_p, 0, row_comm, MPI_STATUS_IGNORE);
 
-        // Сдвиг блоков A и B
-        MPI_Sendrecv_replace(local_A.data(), block_size * block_size, MPI_INT, left, 0, right, 0, grid_comm, MPI_STATUS_IGNORE);
-        MPI_Sendrecv_replace(local_B.data(), block_size * block_size, MPI_INT, up, 1, down, 1, grid_comm, MPI_STATUS_IGNORE);
+        // Shift matrix B up within the column communicator
+        MPI_Sendrecv_replace(local_B.data(), block_size * block_size, MPI_INT, (coords[0] - 1 + sqrt_p) % sqrt_p, 0,
+                             (coords[0] + 1) % sqrt_p, 0, col_comm, MPI_STATUS_IGNORE);
+
+        file << "block A:" << std::endl;
+        printMatrixToFile(file, local_A, block_size, block_size);
+
+        file << "block B:" << std::endl;
+        printMatrixToFile(file, local_B, block_size, block_size);
     }
 
-    file << "Final block C: " << left << " " << right << std::endl;
+    file << "Final block C: " << std::endl;
     printMatrixToFile(file, local_C, block_size, block_size);
 
     // Итоговая матрица для процесса 0
@@ -269,7 +302,7 @@ int main(int argc, char **argv)
         displs.data(),           // Смещения каждого блока в итоговой матрице
         MPI_INT,                 // Тип данных
         0,                       // Ранк процесса, который собирает данные
-        grid_comm               // Глобальный коммуникатор
+        grid_comm                // Глобальный коммуникатор
     );
 
     // Печать итоговой матрицы на процессе 0
